@@ -1,141 +1,93 @@
-CREATE DATABASE HuellasVerdes
-GO
--- Usando la base de datos creada
-USE HuellasVerdes
-GO
--- Agregar filegroup para las ventas
-ALTER DATABASE HuellasVerdes
-ADD FILEGROUP FG_Transacciones;
--- Agregar filegroup para los productos (inventario)
-ALTER DATABASE HuellasVerdes 
-ADD FILEGROUP FG_Articulos;
--- Agregar filegroup para los clientes
-ALTER DATABASE HuellasVerdes
-ADD FILEGROUP FG_Compradores;
-GO
--- Agregar archivo físico para las ventas
-ALTER DATABASE HuellasVerdes
-ADD FILE (
-    NAME = 'TransaccionesFile', 
-    FILENAME = 'C:\Proyecto integrador\SQLDATA\TransaccionesFile.ndf', 
-    SIZE = 5MB, 
-    MAXSIZE = 100MB, 
-    FILEGROWTH = 5MB) 
-TO FILEGROUP FG_Transacciones;
-GO
--- Agregar archivo físico para los productos (inventario)
-ALTER DATABASE HuellasVerdes
-ADD FILE (
-    NAME = 'ArticulosFile', 
-    FILENAME = 'C:\Proyecto integrador\SQLDATA\ArticulosFile.ndf', 
-    SIZE = 5MB, 
-    MAXSIZE = 100MB, 
-    FILEGROWTH = 5MB) 
-TO FILEGROUP FG_Articulos;
-GO
--- Agregar archivo físico para los clientes
-ALTER DATABASE HuellasVerdes
-ADD FILE (
-    NAME = 'CompradoresFile', 
-    FILENAME = 'C:\Proyecto integrador\SQLDATA\CompradoresFile.ndf', 
-    SIZE = 5MB, 
-    MAXSIZE = 100MB, 
-    FILEGROWTH = 5MB) 
-TO FILEGROUP FG_Compradores;
-GO
--- Creando esquemas
-CREATE SCHEMA compradores
-GO
-CREATE SCHEMA transacciones
-GO
-CREATE SCHEMA articulos
-GO
-CREATE SCHEMA administrador
-GO
--- Tabla Comprador
+-- Crear base de datos y conectarse
+--CREATE DATABASE HuellasVerdes;
+--\c HuellasVerdes
+
+-- Crear esquemas
+CREATE SCHEMA compradores;
+CREATE SCHEMA transacciones;
+CREATE SCHEMA articulos;
+CREATE SCHEMA administrador;
+
+-- Tabla unificada Comprador
 CREATE TABLE compradores.Comprador (
-    idComprador INT IDENTITY(1,1) PRIMARY KEY,
-    Direccion1 NVARCHAR(100),
-    Direccion2 NVARCHAR(100),
-    Telefono NVARCHAR(25) -- CAMBIO: de INT a NVARCHAR(15)
-) ON FG_Compradores;
--- Tabla Natural
-CREATE TABLE compradores.Natural (
-    idComprador INT PRIMARY KEY,
-    DNI NVARCHAR(8) NOT NULL,
-    Nombre NVARCHAR(100),
-    ApellidoP NVARCHAR(100),
-    ApellidoM NVARCHAR(100),
-    CONSTRAINT FK_Natural_Comprador FOREIGN KEY (idComprador) REFERENCES compradores.Comprador(idComprador)
-)ON FG_Compradores;
--- Tabla Empresa
-CREATE TABLE compradores.Empresa (
-    idComprador INT PRIMARY KEY,
-    RUC NVARCHAR(11) NOT NULL,
-    RazonSocial NVARCHAR(100),
-    CONSTRAINT FK_Empresa_Comprador FOREIGN KEY (idComprador) REFERENCES compradores.Comprador(idComprador)
-)ON FG_Compradores;
-GO
+    idComprador SERIAL PRIMARY KEY,
+    tipo_comprador CHAR(1) CHECK (tipo_comprador IN ('N', 'E')),
+    Direccion1 VARCHAR(100),
+    Direccion2 VARCHAR(100),
+    Telefono VARCHAR(25),
+    -- Para naturales
+    DNI VARCHAR(8),
+    Nombre VARCHAR(100),
+    ApellidoP VARCHAR(100),
+    ApellidoM VARCHAR(100),
+    -- Para empresas
+    RUC VARCHAR(11),
+    RazonSocial VARCHAR(100)
+);
+
 -- Tabla Rama
 CREATE TABLE articulos.Rama (
-    idRama INT IDENTITY(1,1) PRIMARY KEY,
-    Nombre NVARCHAR(100),
-    Descripcion NVARCHAR(255)
-)ON FG_Articulos;
+    idRama SERIAL PRIMARY KEY,
+    Nombre VARCHAR(100),
+    Descripcion VARCHAR(255)
+);
+
 -- Tabla Articulo
 CREATE TABLE articulos.Articulo (
-    idArticulo INT IDENTITY(1,1) PRIMARY KEY,
-    codeArticulo NVARCHAR(10),
-    nombreArticulo NVARCHAR(100),
-    Tipo NVARCHAR(10),
-    Descripcion NVARCHAR(255),
+    idArticulo SERIAL PRIMARY KEY,
+    codeArticulo VARCHAR(10),
+    nombreArticulo VARCHAR(100),
+    Tipo VARCHAR(10),
+    Descripcion VARCHAR(255),
     idRama INT,
-    precioUnitario DECIMAL(10, 2),
-    CONSTRAINT FK_Articulo_Rama FOREIGN KEY (idRama) REFERENCES articulos.Rama(idRama)
-)ON FG_Articulos;
--- Tabla Ingreso
-CREATE TABLE articulos.Ingreso (
-    idIngreso INT IDENTITY(1,1) PRIMARY KEY,
-    idArticulo INT,
-    fechaIngreso DATE,
-    cantidadIngreso INT,
-    CONSTRAINT FK_Articulo_Ingreso FOREIGN KEY (idArticulo) REFERENCES articulos.Articulo(idArticulo)
-)ON FG_Articulos;
--- Tabla Egreso
-CREATE TABLE articulos.Egreso (
-    idEgreso INT IDENTITY(1,1) PRIMARY KEY,
-    idArticulo INT,
-    fechaEgreso DATE,
-    cantidadEgreso INT,
-    CONSTRAINT FK_Articulo_Egreso FOREIGN KEY (idArticulo) REFERENCES articulos.Articulo(idArticulo)
-)ON FG_Articulos;
+    precioUnitario NUMERIC(10, 2),
+    CONSTRAINT FK_Articulo_Rama FOREIGN KEY (idRama)
+        REFERENCES articulos.Rama(idRama)
+);
+
+-- Tabla unificada MovimientoStock (reemplaza Ingreso y Egreso)
+CREATE TABLE articulos.MovimientoStock (
+    idMovimiento SERIAL PRIMARY KEY,
+    idArticulo INT NOT NULL,
+    fechaMovimiento DATE NOT NULL,
+    tipo_movimiento CHAR(1) CHECK (tipo_movimiento IN ('I', 'E')), -- 'I' para ingreso, 'E' para egreso
+    cantidad INT NOT NULL,
+    CONSTRAINT FK_Movimiento_Articulo FOREIGN KEY (idArticulo)
+        REFERENCES articulos.Articulo(idArticulo)
+);
+
 -- Tabla Almacen
 CREATE TABLE articulos.Almacen (
-    idZonaAlmacen NVARCHAR(10) PRIMARY KEY,
+    idZonaAlmacen VARCHAR(10) PRIMARY KEY,
     idArticulo INT,
     Stock INT,
-    CONSTRAINT FK_Almacen_Articulo FOREIGN KEY (idArticulo) REFERENCES articulos.Articulo(idArticulo)
-)ON FG_Articulos;
-GO
+    CONSTRAINT FK_Almacen_Articulo FOREIGN KEY (idArticulo)
+        REFERENCES articulos.Articulo(idArticulo)
+);
+
 -- Tabla Transaccion
 CREATE TABLE transacciones.Transaccion (
-    idTransaccion INT IDENTITY(1,1) PRIMARY KEY,
+    idTransaccion SERIAL PRIMARY KEY,
     numDocumento INT,
-    tipoDocumento NVARCHAR(50),
+    tipoDocumento VARCHAR(50),
     fechaTransaccion DATE,
     idComprador INT,
-    Subtotal DECIMAL (5, 2),
-    IGV DECIMAL(5, 2),
-    Descuento DECIMAL(5, 2),
-    Total DECIMAL (5, 2),
-    CONSTRAINT FK_Documento_Comprador FOREIGN KEY (idComprador) REFERENCES compradores.Comprador(idComprador)
-)ON FG_Transacciones;
+    Subtotal NUMERIC(5, 2),
+    IGV NUMERIC(5, 2),
+    Descuento NUMERIC(5, 2),
+    Total NUMERIC(5, 2),
+    CONSTRAINT FK_Documento_Comprador FOREIGN KEY (idComprador)
+        REFERENCES compradores.Comprador(idComprador)
+);
+
 -- Tabla DetalleTransaccion
 CREATE TABLE transacciones.DetalleTransaccion (
     idTransaccion INT,
     idArticulo INT,
     Cantidad INT,
     PRIMARY KEY (idTransaccion, idArticulo),
-    CONSTRAINT FK_DetalleTransaccion_Transaccion FOREIGN KEY (idTransaccion) REFERENCES transacciones.Transaccion(idTransaccion),
-    CONSTRAINT FK_DetalleTransaccion_Articulo FOREIGN KEY (idArticulo) REFERENCES articulos.Articulo(idArticulo)
-)ON FG_Transacciones;
+    CONSTRAINT FK_DetalleTransaccion_Transaccion FOREIGN KEY (idTransaccion)
+        REFERENCES transacciones.Transaccion(idTransaccion),
+    CONSTRAINT FK_DetalleTransaccion_Articulo FOREIGN KEY (idArticulo)
+        REFERENCES articulos.Articulo(idArticulo)
+);
